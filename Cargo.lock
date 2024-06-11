@@ -20,6 +20,9 @@ checksum = "0c4b4d0bd25bd0b74681c0ad21497610ce1b7c91b1022cd21c80c6fbdd9476b0"
 [[package]]
 name = "bober-rs"
 version = "0.1.0"
+dependencies = [
+ "simple",
+]
 
 [[package]]
 name = "cfg-if"
@@ -281,6 +284,14 @@ name = "semver"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61697e0a1c7e512e84a621326239844a24d8207b4669b41bc18b32ea5cbf988b"
+
+[[package]]
+name = "simple"
+version = "0.1.0"
+dependencies = [
+ "lexing",
+ "rstest",
+]
 
 [[package]]
 name = "slab"
