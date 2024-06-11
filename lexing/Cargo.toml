@@ -1,12 +1,7 @@
 [package]
-name = "bober-rs"
+name = "lexing"
 version = "0.1.0"
 edition = "2021"
 
-[workspace]
-
-members = [
-    "lexing",
-]
-
 [dependencies]
+rstest = "=0.21.0"
