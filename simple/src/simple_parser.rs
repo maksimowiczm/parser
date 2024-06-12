@@ -1,5 +1,5 @@
-use lexing::lexer::Lexer;
 use crate::simple_lexer::{SimpleLexerError, SimpleToken};
+use lexing::lexer::Lexer;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use std::iter::Peekable;
@@ -96,6 +96,25 @@ impl SimpleParser {
 
         expression(&mut tokens)
     }
+
+    pub fn parse_program(&self, input: &str) -> Result<Node, SimpleParserError> {
+        let mut tokens = self
+            .lexer
+            .tokenize(input)
+            .map_err(|err| SimpleParserError::LexerError(err))?
+            .into_iter()
+            .peekable();
+
+        let mut procedures = Vec::new();
+        while let Some(_) = tokens.peek() {
+            if tokens.peek().unwrap() == &SimpleToken::Eof {
+                break;
+            }
+            procedures.push(Box::new(procedure(&mut tokens, 1)?));
+        }
+
+        Ok(Node::Program { procedures })
+    }
 }
 
 fn expect_token(
@@ -110,6 +129,65 @@ fn expect_token(
         true => Ok(()),
         false => Err(SimpleParserError::UnexpectedToken(expected)),
     }
+}
+
+fn procedure(
+    tokens: &mut Peekable<impl Iterator<Item = SimpleToken>>,
+    line: u32,
+) -> Result<Node, SimpleParserError> {
+    let name = match tokens.next() {
+        Some(SimpleToken::Procedure(name)) => name,
+        _ => return Err(SimpleParserError::UnexpectedEndOfInput),
+    };
+
+    expect_token(tokens, SimpleToken::LeftBrace)?;
+
+    let mut body = Vec::new();
+    while let Some(token) = tokens.peek() {
+        match token {
+            SimpleToken::RightBrace => {
+                tokens.next();
+                break;
+            }
+            _ => body.push(Box::new(statement(tokens, line)?)),
+        }
+    }
+
+    Ok(Node::Procedure { name, body })
+}
+
+fn statement(
+    tokens: &mut Peekable<impl Iterator<Item = SimpleToken>>,
+    line: u32,
+) -> Result<Node, SimpleParserError> {
+    match tokens.peek() {
+        Some(SimpleToken::Reference(_)) => assign(tokens, line),
+        _ => Err(SimpleParserError::UnexpectedToken(
+            tokens.next().unwrap_or(SimpleToken::Eof),
+        )),
+    }
+}
+
+fn assign(
+    tokens: &mut Peekable<impl Iterator<Item = SimpleToken>>,
+    line: u32,
+) -> Result<Node, SimpleParserError> {
+    let variable = match tokens.next() {
+        Some(SimpleToken::Reference(name)) => name,
+        _ => return Err(SimpleParserError::UnexpectedEndOfInput),
+    };
+
+    expect_token(tokens, SimpleToken::Equal)?;
+
+    let expression = expression(tokens)?;
+
+    expect_token(tokens, SimpleToken::SemiColon)?;
+
+    Ok(Node::Assign {
+        line,
+        variable,
+        expression: Box::new(expression),
+    })
 }
 
 fn expression(
