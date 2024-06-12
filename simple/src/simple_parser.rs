@@ -261,7 +261,6 @@ fn statement_list(
             }
             _ => body.push(Box::new(statement(tokens, line)?)),
         }
-        *line += 1;
     }
 
     Ok(Node::StatementList { statements: body })
@@ -271,7 +270,7 @@ fn statement(
     tokens: &mut Peekable<impl Iterator<Item = SimpleToken>>,
     line: &mut u32,
 ) -> Result<Node, SimpleParserError> {
-    match tokens.peek() {
+    let result = match tokens.peek() {
         Some(SimpleToken::Reference(_)) => assign(tokens, *line),
         Some(SimpleToken::While(_)) => while_statement(tokens, line),
         Some(SimpleToken::If(_)) => if_statement(tokens, line),
@@ -285,7 +284,10 @@ fn statement(
             ],
             near_tokens: tokens.take(6).collect(),
         }),
-    }
+    };
+
+    *line += 1;
+    result
 }
 
 fn call(
@@ -337,6 +339,9 @@ fn while_statement(
 
     let statements = Box::new(statement_list(tokens, line)?);
 
+    // give back the line
+    *line -= 1;
+
     Ok(Node::While {
         line: while_line,
         variable,
@@ -360,6 +365,9 @@ fn if_statement(
     expect_token(tokens, SimpleToken::Else)?;
 
     let else_statements = Box::new(statement_list(tokens, line)?);
+
+    // give back the line
+    *line -= 1;
 
     Ok(Node::If {
         line: if_line,
@@ -791,6 +799,295 @@ mod tests {
         let parser = SimpleParser::new(lexer);
 
         let ast = parser.parse_program("")?;
+
+        assert_eq!(ast, expected);
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::double_if(
+        &[
+            SimpleToken::If("x".to_string()),
+            SimpleToken::LeftBrace,
+            SimpleToken::If("y".to_string()),
+            SimpleToken::LeftBrace,
+            SimpleToken::Reference("z".to_string()),
+            SimpleToken::Equal,
+            SimpleToken::Number(1),
+            SimpleToken::SemiColon,
+            SimpleToken::RightBrace,
+            SimpleToken::Else,
+            SimpleToken::LeftBrace,
+            SimpleToken::Reference("a".to_string()),
+            SimpleToken::Equal,
+            SimpleToken::Number(2),
+            SimpleToken::SemiColon,
+            SimpleToken::RightBrace,
+            SimpleToken::RightBrace,
+            SimpleToken::Else,
+            SimpleToken::LeftBrace,
+            SimpleToken::Reference("b".to_string()),
+            SimpleToken::Equal,
+            SimpleToken::Number(3),
+            SimpleToken::SemiColon,
+        ],
+        Node::If {
+            line: 1,
+            variable: "x".to_string(),
+            if_statements: Box::new(Node::StatementList {
+                statements: vec![
+                    Box::new(Node::If {
+                        line: 2,
+                        variable: "y".to_string(),
+                        if_statements: Box::new(Node::StatementList {
+                            statements: vec![
+                                Box::new(Node::Assign {
+                                    line: 3,
+                                    variable: "z".to_string(),
+                                    expression: Box::new(Node::Constant { value: 1 }),
+                                }),
+                            ]
+                        }),
+                        else_statements: Box::new(Node::StatementList {
+                            statements: vec![
+                                Box::new(Node::Assign {
+                                    line: 4,
+                                    variable: "a".to_string(),
+                                    expression: Box::new(Node::Constant { value: 2 }),
+                                }),
+                            ]
+                        }),
+                    }),
+                ]
+            }),
+            else_statements: Box::new(Node::StatementList {
+                statements: vec![
+                    Box::new(Node::Assign {
+                        line: 5,
+                        variable: "b".to_string(),
+                        expression: Box::new(Node::Constant { value: 3 }),
+                    }),
+                ]
+            }),
+        }
+    )]
+    #[case::triple_if(
+        &[
+            SimpleToken::If("x".to_string()),
+            SimpleToken::LeftBrace,
+            SimpleToken::If("y".to_string()),
+            SimpleToken::LeftBrace,
+            SimpleToken::If("z".to_string()),
+            SimpleToken::LeftBrace,
+            SimpleToken::Reference("z".to_string()),
+            SimpleToken::Equal,
+            SimpleToken::Number(1),
+            SimpleToken::SemiColon,
+            SimpleToken::RightBrace,
+            SimpleToken::Else,
+            SimpleToken::LeftBrace,
+            SimpleToken::Reference("a".to_string()),
+            SimpleToken::Equal,
+            SimpleToken::Number(2),
+            SimpleToken::SemiColon,
+            SimpleToken::RightBrace,
+            SimpleToken::RightBrace,
+            SimpleToken::Else,
+            SimpleToken::LeftBrace,
+            SimpleToken::Reference("b".to_string()),
+            SimpleToken::Equal,
+            SimpleToken::Number(3),
+            SimpleToken::SemiColon,
+            SimpleToken::RightBrace,
+            SimpleToken::RightBrace,
+            SimpleToken::Else,
+            SimpleToken::LeftBrace,
+            SimpleToken::Reference("c".to_string()),
+            SimpleToken::Equal,
+            SimpleToken::Number(3),
+            SimpleToken::SemiColon,
+        ],
+        Node::If {
+            line: 1,
+            variable: "x".to_string(),
+            if_statements: Box::new(Node::StatementList {
+                statements: vec![
+                    Box::new(Node::If {
+                        line: 2,
+                        variable: "y".to_string(),
+                        if_statements: Box::new(Node::StatementList {
+                            statements: vec![
+                                Box::new(Node::If {
+                                    line: 3,
+                                    variable: "z".to_string(),
+                                    if_statements: Box::new(Node::StatementList {
+                                        statements: vec![
+                                            Box::new(Node::Assign {
+                                                line: 4,
+                                                variable: "z".to_string(),
+                                                expression: Box::new(Node::Constant { value: 1 }),
+                                            }),
+                                        ]
+                                    }),
+                                    else_statements: Box::new(Node::StatementList {
+                                        statements: vec![
+                                            Box::new(Node::Assign {
+                                                line: 5,
+                                                variable: "a".to_string(),
+                                                expression: Box::new(Node::Constant { value: 2 }),
+                                            }),
+                                        ]
+                                    }),
+                                }),
+                            ]
+                        }),
+                        else_statements: Box::new(Node::StatementList {
+                            statements: vec![
+                                Box::new(Node::Assign {
+                                    line: 6,
+                                    variable: "b".to_string(),
+                                    expression: Box::new(Node::Constant { value: 3 }),
+                                }),
+                            ]
+                        }),
+                    }),
+                ]
+            }),
+            else_statements: Box::new(Node::StatementList {
+                statements: vec![
+                    Box::new(Node::Assign {
+                        line: 7,
+                        variable: "c".to_string(),
+                        expression: Box::new(Node::Constant { value: 3 }),
+                    }),
+                ]
+            }),
+        }
+    )]
+    fn test_if(
+        #[case] tokens: &[SimpleToken],
+        #[case] expected: Node,
+    ) -> Result<(), SimpleParserError> {
+        let mut tokens = tokens.iter().cloned().peekable();
+        let mut line = 1;
+
+        let ast = if_statement(&mut tokens, &mut line)?;
+
+        assert_eq!(ast, expected);
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::double_while(
+        &[
+            SimpleToken::While("x".to_string()),
+            SimpleToken::LeftBrace,
+            SimpleToken::While("y".to_string()),
+            SimpleToken::LeftBrace,
+            SimpleToken::Reference("z".to_string()),
+            SimpleToken::Equal,
+            SimpleToken::Number(1),
+            SimpleToken::SemiColon,
+            SimpleToken::RightBrace,
+            SimpleToken::RightBrace,
+        ],
+        Node::While {
+            line: 1,
+            variable: "x".to_string(),
+            statements: Box::new(Node::StatementList {
+                statements: vec![
+                    Box::new(Node::While {
+                        line: 2,
+                        variable: "y".to_string(),
+                        statements: Box::new(Node::StatementList {
+                            statements: vec![
+                                Box::new(Node::Assign {
+                                    line: 3,
+                                    variable: "z".to_string(),
+                                    expression: Box::new(Node::Constant { value: 1 }),
+                                }),
+                            ]
+                        }),
+                    }),
+                ]
+            }),
+        }
+    )]
+    fn test_while(
+        #[case] tokens: &[SimpleToken],
+        #[case] expected: Node,
+    ) -> Result<(), SimpleParserError> {
+        let mut tokens = tokens.iter().cloned().peekable();
+        let mut line = 1;
+
+        let ast = while_statement(&mut tokens, &mut line)?;
+
+        assert_eq!(ast, expected);
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::back_to_back_while(
+        &[
+            SimpleToken::LeftBrace,
+            SimpleToken::While("x".to_string()),
+            SimpleToken::LeftBrace,
+            SimpleToken::Reference("x".to_string()),
+            SimpleToken::Equal,
+            SimpleToken::Number(1),
+            SimpleToken::SemiColon,
+            SimpleToken::RightBrace,
+            SimpleToken::While("y".to_string()),
+            SimpleToken::LeftBrace,
+            SimpleToken::Reference("y".to_string()),
+            SimpleToken::Equal,
+            SimpleToken::Number(2),
+            SimpleToken::SemiColon,
+            SimpleToken::RightBrace,
+            SimpleToken::RightBrace,
+        ],
+        Node::StatementList {
+            statements: vec![
+                Box::new(Node::While {
+                    line: 1,
+                    variable: "x".to_string(),
+                    statements: Box::new(Node::StatementList {
+                        statements: vec![
+                            Box::new(Node::Assign {
+                                line: 2,
+                                variable: "x".to_string(),
+                                expression: Box::new(Node::Constant { value: 1 }),
+                            }),
+                        ]
+                    }),
+                }),
+                Box::new(Node::While {
+                    line: 3,
+                    variable: "y".to_string(),
+                    statements: Box::new(Node::StatementList {
+                        statements: vec![
+                            Box::new(Node::Assign {
+                                line: 4,
+                                variable: "y".to_string(),
+                                expression: Box::new(Node::Constant { value: 2 }),
+                            }),
+                        ]
+                    }),
+                }),
+            ]
+        }
+    )]
+    fn test_statement_list(
+        #[case] tokens: &[SimpleToken],
+        #[case] expected: Node,
+    ) -> Result<(), SimpleParserError> {
+        let mut tokens = tokens.iter().cloned().peekable();
+        let mut line = 1;
+
+        let ast = statement_list(&mut tokens, &mut line)?;
 
         assert_eq!(ast, expected);
 
