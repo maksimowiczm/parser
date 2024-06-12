@@ -66,9 +66,10 @@ pub mod basic_lexer {
                         if ch.is_alphabetic() {
                             let mut word = ch.to_string();
 
-                            while let Some(ch) = iter.next() {
+                            while let Some(ch) = iter.peek() {
                                 if ch.is_alphabetic() || ch.is_numeric() {
-                                    word.push(ch);
+                                    word.push(*ch);
+                                    iter.next();
                                 } else {
                                     break;
                                 }
@@ -106,6 +107,11 @@ mod tests {
     #[case::equal("1 = 2", &[Token::Number(1), Token::Equal, Token::Number(2), Token::Eof])]
     #[case::semicolon("1; 2", &[Token::Number(1), Token::SemiColon, Token::Number(2), Token::Eof])]
     #[case::word("foo bar", &[Token::Word("foo".to_string()), Token::Word("bar".to_string()), Token::Eof])]
+    #[case::expression("1+2", &[Token::Number(1), Token::Plus, Token::Number(2), Token::Eof])]
+    #[case::assignment("a = 1", &[Token::Word("a".to_string()), Token::Equal, Token::Number(1), Token::Eof])]
+    #[case::assignment("a=1", &[Token::Word("a".to_string()), Token::Equal, Token::Number(1), Token::Eof])]
+    #[case::assignment("a =1", &[Token::Word("a".to_string()), Token::Equal, Token::Number(1), Token::Eof])]
+    #[case::assignment("a= 1", &[Token::Word("a".to_string()), Token::Equal, Token::Number(1), Token::Eof])]
     fn test_basic_lexer(#[case] input: &'static str, #[case] output: &[Token]) {
         let lexer = BasicLexer::default();
         let tokens = lexer.tokenize(input).unwrap();
