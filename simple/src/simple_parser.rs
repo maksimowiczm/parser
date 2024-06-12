@@ -275,6 +275,7 @@ fn statement(
         Some(SimpleToken::Reference(_)) => assign(tokens, *line),
         Some(SimpleToken::While(_)) => while_statement(tokens, line),
         Some(SimpleToken::If(_)) => if_statement(tokens, line),
+        Some(SimpleToken::Call(_)) => call(tokens, *line),
         _ => Err(SimpleParserError::UnexpectedToken {
             unexpected: tokens.next().unwrap_or(SimpleToken::Eof),
             expected: vec![
@@ -285,6 +286,20 @@ fn statement(
             near_tokens: tokens.take(6).collect(),
         }),
     }
+}
+
+fn call(
+    tokens: &mut Peekable<impl Iterator<Item = SimpleToken>>,
+    line: u32,
+) -> Result<Node, SimpleParserError> {
+    let name = match tokens.next() {
+        Some(SimpleToken::Call(name)) => name,
+        _ => return Err(SimpleParserError::UnexpectedEndOfInput),
+    };
+
+    expect_token(tokens, SimpleToken::SemiColon)?;
+
+    Ok(Node::Call { line, name })
 }
 
 fn assign(
@@ -737,6 +752,29 @@ mod tests {
                                     ] }),
                                 }),
                             ] }),
+                        }),
+                    ]
+                }),
+            })]
+        }
+    )]
+    #[case::procedure_with_call(
+        &[
+            SimpleToken::Procedure("main".to_string()),
+            SimpleToken::LeftBrace,
+            SimpleToken::Call("foo".to_string()),
+            SimpleToken::SemiColon,
+            SimpleToken::RightBrace,
+            SimpleToken::Eof
+        ],
+        Node::Program {
+            procedures: vec![Box::new(Node::Procedure {
+                name: "main".to_string(),
+                body: Box::new(Node::StatementList {
+                    statements: vec![
+                        Box::new(Node::Call {
+                            line: 1,
+                            name: "foo".to_string(),
                         }),
                     ]
                 }),

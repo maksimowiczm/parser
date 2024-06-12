@@ -27,12 +27,13 @@ pub enum SimpleToken {
     While(String),
     If(String),
     Else,
+    Call(String),
 }
 
 impl Display for SimpleToken {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            SimpleToken::Number { .. } => write!(f, "Number"),
+            SimpleToken::Number(number) => write!(f, "Number {}", number),
             SimpleToken::Plus => write!(f, "Plus"),
             SimpleToken::Minus => write!(f, "Minus"),
             SimpleToken::Multiply => write!(f, "Multiply"),
@@ -48,6 +49,7 @@ impl Display for SimpleToken {
             SimpleToken::While { .. } => write!(f, "While"),
             SimpleToken::If { .. } => write!(f, "If"),
             SimpleToken::Else => write!(f, "Else"),
+            SimpleToken::Call(name) => write!(f, "Call {}", name),
         }
     }
 }
@@ -117,6 +119,13 @@ impl Lexer<SimpleToken, SimpleLexerError> for SimpleLexer {
                         result.push(SimpleToken::If(name.clone()));
                     }
                     "else" => result.push(SimpleToken::Else),
+                    "call" => {
+                        if let Some(Token::Word(name)) = iter.next() {
+                            result.push(SimpleToken::Call(name.clone()));
+                        } else {
+                            return Err(SimpleLexerError::ExpectedReferenceName);
+                        }
+                    }
                     _ => result.push(SimpleToken::Reference(word.clone())),
                 },
                 _ => result.push(map_token(token)?),
