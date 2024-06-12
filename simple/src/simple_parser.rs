@@ -36,7 +36,23 @@ pub enum Operator {
     Times,
 }
 
-#[derive(Debug, PartialEq)]
+impl Debug for Operator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            Operator::Plus => {
+                write!(f, "+")
+            }
+            Operator::Minus => {
+                write!(f, "-")
+            }
+            Operator::Times => {
+                write!(f, "*")
+            }
+        }
+    }
+}
+
+#[derive(PartialEq)]
 pub enum Node {
     Program {
         procedures: Vec<Box<Node>>,
@@ -79,6 +95,62 @@ pub enum Node {
     Constant {
         value: i32,
     },
+}
+
+impl Debug for Node {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            Node::Program { procedures } => {
+                write!(f, "Program {:?}", procedures)
+            }
+            Node::Procedure { name, body } => {
+                write!(f, "Procedure: {} {:?}", name, body)
+            }
+            Node::StatementList { statements } => {
+                write!(f, "{:?}", statements)
+            }
+            Node::Assign {
+                line,
+                variable,
+                expression,
+                ..
+            } => {
+                write!(f, "{}. {} = {:?};", line, variable, expression)
+            }
+            Node::While {
+                line,
+                variable,
+                statements,
+                ..
+            } => {
+                write!(f, "{}. while {} {:?}", line, variable, statements)
+            }
+            Node::If {
+                line,
+                variable,
+                if_statements,
+                else_statements,
+            } => {
+                write!(
+                    f,
+                    "{}. if {} then {:?} else {:?}",
+                    line, variable, if_statements, else_statements
+                )
+            }
+            Node::Expression { .. } => {
+                write!(f, "<expression>")
+            }
+            Node::Reference { name } => {
+                write!(f, "{}", name)
+            }
+            Node::Constant { value } => {
+                write!(f, "{}", value)
+            }
+            Node::Call { line, name } => {
+                write!(f, "{}. call {}", line, name)
+            }
+        }
+    }
 }
 
 impl SimpleParser {
