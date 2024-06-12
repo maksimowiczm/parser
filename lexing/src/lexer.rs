@@ -45,7 +45,7 @@ pub mod basic_lexer {
                     '}' => tokens.push(Token::RightBrace),
                     '=' => tokens.push(Token::Equal),
                     ';' => tokens.push(Token::SemiColon),
-                    '1'..='9' => {
+                    '0'..='9' => {
                         let mut number = ch.to_digit(10).unwrap() as i32;
                         while let Some(ch) = iter.peek() {
                             if let Some(digit) = ch.to_digit(10) {

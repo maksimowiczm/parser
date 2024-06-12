@@ -1,7 +1,7 @@
 use crate::simple_lexer::{SimpleLexerError, SimpleToken};
 use lexing::lexer::Lexer;
 use std::error::Error;
-use std::fmt::{Debug, Display, Formatter};
+use std::fmt::{write, Debug, Display, Formatter};
 use std::iter::Peekable;
 
 pub struct SimpleParser {
@@ -29,7 +29,7 @@ impl Display for SimpleParserError {
 
 impl Error for SimpleParserError {}
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub enum Operator {
     Plus,
     Minus,
@@ -59,7 +59,7 @@ pub enum Node {
     },
     Procedure {
         name: String,
-        body: Vec<Box<Node>>,
+        body: Box<Node>,
     },
     StatementList {
         statements: Vec<Box<Node>>,
@@ -178,11 +178,12 @@ impl SimpleParser {
             .peekable();
 
         let mut procedures = Vec::new();
+        let mut line = 1;
         while let Some(_) = tokens.peek() {
             if tokens.peek().unwrap() == &SimpleToken::Eof {
                 break;
             }
-            procedures.push(Box::new(procedure(&mut tokens, 1)?));
+            procedures.push(Box::new(procedure(&mut tokens, &mut line)?));
         }
 
         Ok(Node::Program { procedures })
@@ -205,13 +206,22 @@ fn expect_token(
 
 fn procedure(
     tokens: &mut Peekable<impl Iterator<Item = SimpleToken>>,
-    line: u32,
+    line: &mut u32,
 ) -> Result<Node, SimpleParserError> {
     let name = match tokens.next() {
         Some(SimpleToken::Procedure(name)) => name,
         _ => return Err(SimpleParserError::UnexpectedEndOfInput),
     };
 
+    let body = Box::new(statement_list(tokens, line)?);
+
+    Ok(Node::Procedure { name, body })
+}
+
+fn statement_list(
+    tokens: &mut Peekable<impl Iterator<Item = SimpleToken>>,
+    line: &mut u32,
+) -> Result<Node, SimpleParserError> {
     expect_token(tokens, SimpleToken::LeftBrace)?;
 
     let mut body = Vec::new();
@@ -223,17 +233,20 @@ fn procedure(
             }
             _ => body.push(Box::new(statement(tokens, line)?)),
         }
+        *line += 1;
     }
 
-    Ok(Node::Procedure { name, body })
+    Ok(Node::StatementList { statements: body })
 }
 
 fn statement(
     tokens: &mut Peekable<impl Iterator<Item = SimpleToken>>,
-    line: u32,
+    line: &mut u32,
 ) -> Result<Node, SimpleParserError> {
     match tokens.peek() {
-        Some(SimpleToken::Reference(_)) => assign(tokens, line),
+        Some(SimpleToken::Reference(_)) => assign(tokens, *line),
+        Some(SimpleToken::While(_)) => while_statement(tokens, line),
+        Some(SimpleToken::If(_)) => if_statement(tokens, line),
         _ => Err(SimpleParserError::UnexpectedToken(
             tokens.next().unwrap_or(SimpleToken::Eof),
         )),
@@ -259,6 +272,51 @@ fn assign(
         line,
         variable,
         expression: Box::new(expression),
+    })
+}
+
+fn while_statement(
+    tokens: &mut Peekable<impl Iterator<Item = SimpleToken>>,
+    line: &mut u32,
+) -> Result<Node, SimpleParserError> {
+    let variable = match tokens.next() {
+        Some(SimpleToken::While(name)) => name,
+        _ => return Err(SimpleParserError::UnexpectedEndOfInput),
+    };
+    let while_line = *line;
+    *line += 1;
+
+    let statements = Box::new(statement_list(tokens, line)?);
+
+    Ok(Node::While {
+        line: while_line,
+        variable,
+        statements,
+    })
+}
+
+fn if_statement(
+    tokens: &mut Peekable<impl Iterator<Item = SimpleToken>>,
+    line: &mut u32,
+) -> Result<Node, SimpleParserError> {
+    let variable = match tokens.next() {
+        Some(SimpleToken::If(name)) => name,
+        _ => return Err(SimpleParserError::UnexpectedEndOfInput),
+    };
+    let if_line = *line;
+    *line += 1;
+
+    let if_statements = Box::new(statement_list(tokens, line)?);
+
+    expect_token(tokens, SimpleToken::Else)?;
+
+    let else_statements = Box::new(statement_list(tokens, line)?);
+
+    Ok(Node::If {
+        line: if_line,
+        variable,
+        if_statements,
+        else_statements,
     })
 }
 
@@ -411,14 +469,6 @@ mod tests {
         #[case] tokens: &[SimpleToken],
         #[case] expected: Node,
     ) -> Result<(), SimpleParserError> {
-        struct TestLexer {
-            tokens: Vec<SimpleToken>,
-        }
-        impl Lexer<SimpleToken, SimpleLexerError> for TestLexer {
-            fn tokenize(&self, _input: &str) -> Result<Vec<SimpleToken>, SimpleLexerError> {
-                Ok(self.tokens.clone())
-            }
-        }
         let test_lexer: Box<dyn Lexer<SimpleToken, SimpleLexerError>> = Box::new(TestLexer {
             tokens: tokens.to_vec(),
         });
@@ -426,6 +476,232 @@ mod tests {
         let parser = SimpleParser::new(test_lexer);
 
         let ast = parser.parse_expression("")?;
+
+        assert_eq!(ast, expected);
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::empty_program(
+        &[SimpleToken::Eof],
+        Node::Program { procedures: vec![] }
+    )]
+    #[case::single_procedure(
+        &[
+            SimpleToken::Procedure("main".to_string()),
+            SimpleToken::LeftBrace,
+            SimpleToken::RightBrace,
+            SimpleToken::Eof
+        ],
+        Node::Program {
+            procedures: vec![Box::new(Node::Procedure {
+                name: "main".to_string(),
+                body: Box::new(Node::StatementList { statements: vec![] }),
+            })]
+        }
+    )]
+    #[case::multiple_procedures(
+        &[
+            SimpleToken::Procedure("main".to_string()),
+            SimpleToken::LeftBrace,
+            SimpleToken::RightBrace,
+            SimpleToken::Procedure("foo".to_string()),
+            SimpleToken::LeftBrace,
+            SimpleToken::RightBrace,
+            SimpleToken::Eof
+        ],
+        Node::Program {
+            procedures: vec![
+                Box::new(Node::Procedure {
+                    name: "main".to_string(),
+                    body: Box::new(Node::StatementList { statements: vec![] }),
+                }),
+                Box::new(Node::Procedure {
+                    name: "foo".to_string(),
+                    body: Box::new(Node::StatementList { statements: vec![] }),
+                }),
+            ]
+        }
+    )]
+    #[case::procedure_with_assignment(
+        &[
+            SimpleToken::Procedure("main".to_string()),
+            SimpleToken::LeftBrace,
+            SimpleToken::Reference("x".to_string()),
+            SimpleToken::Equal,
+            SimpleToken::Number(1),
+            SimpleToken::SemiColon,
+            SimpleToken::RightBrace,
+            SimpleToken::Eof
+        ],
+        Node::Program {
+            procedures: vec![Box::new(Node::Procedure {
+                name: "main".to_string(),
+                body: Box::new(Node::StatementList {
+                    statements: vec![
+                        Box::new(Node::Assign {
+                            line: 1,
+                            variable: "x".to_string(),
+                            expression: Box::new(Node::Constant { value: 1 }),
+                        }),
+                    ]
+                }),
+            })]
+        }
+    )]
+    #[case::procedure_with_while_with_assigment(
+        &[
+            SimpleToken::Procedure("main".to_string()),
+            SimpleToken::LeftBrace,
+            SimpleToken::While("x".to_string()),
+            SimpleToken::LeftBrace,
+            SimpleToken::Reference("x".to_string()),
+            SimpleToken::Equal,
+            SimpleToken::Number(1),
+            SimpleToken::SemiColon,
+            SimpleToken::RightBrace,
+            SimpleToken::RightBrace,
+            SimpleToken::Eof
+        ],
+        Node::Program {
+            procedures: vec![Box::new(Node::Procedure {
+                name: "main".to_string(),
+                body: Box::new(Node::StatementList {
+                    statements: vec![
+                        Box::new(Node::While {
+                            line: 1,
+                            variable: "x".to_string(),
+                            statements: Box::new(Node::StatementList { statements: vec![
+                                Box::new(Node::Assign {
+                                    line: 2,
+                                    variable: "x".to_string(),
+                                    expression: Box::new(Node::Constant { value: 1 }),
+                                }),
+                            ] }),
+                        }),
+                    ]
+                }),
+            })]
+        }
+    )]
+    #[case::procedure_with_if_assignment(
+        &[
+            SimpleToken::Procedure("main".to_string()),
+            SimpleToken::LeftBrace,
+            SimpleToken::If("x".to_string()),
+            SimpleToken::LeftBrace,
+            SimpleToken::Reference("x".to_string()),
+            SimpleToken::Equal,
+            SimpleToken::Number(1),
+            SimpleToken::SemiColon,
+            SimpleToken::RightBrace,
+            SimpleToken::Else,
+            SimpleToken::LeftBrace,
+            SimpleToken::Reference("x".to_string()),
+            SimpleToken::Equal,
+            SimpleToken::Number(2),
+            SimpleToken::SemiColon,
+            SimpleToken::RightBrace,
+            SimpleToken::RightBrace,
+            SimpleToken::Eof
+        ],
+        Node::Program {
+            procedures: vec![Box::new(Node::Procedure {
+                name: "main".to_string(),
+                body: Box::new(Node::StatementList {
+                    statements: vec![
+                        Box::new(Node::If {
+                            line: 1,
+                            variable: "x".to_string(),
+                            if_statements: Box::new(Node::StatementList { statements: vec![
+                                Box::new(Node::Assign {
+                                    line: 2,
+                                    variable: "x".to_string(),
+                                    expression: Box::new(Node::Constant { value: 1 }),
+                                }),
+                            ] }),
+                            else_statements: Box::new(Node::StatementList { statements: vec![
+                                Box::new(Node::Assign {
+                                    line: 3,
+                                    variable: "x".to_string(),
+                                    expression: Box::new(Node::Constant { value: 2 }),
+                                }),
+                            ] }),
+                        }),
+                    ]
+                }),
+            })]
+        }
+    )]
+    #[case::procedure_with_while_with_if_with_assignment(
+        &[
+            SimpleToken::Procedure("main".to_string()),
+            SimpleToken::LeftBrace,
+            SimpleToken::While("x".to_string()),
+            SimpleToken::LeftBrace,
+            SimpleToken::If("y".to_string()),
+            SimpleToken::LeftBrace,
+            SimpleToken::Reference("y".to_string()),
+            SimpleToken::Equal,
+            SimpleToken::Number(1),
+            SimpleToken::SemiColon,
+            SimpleToken::RightBrace,
+            SimpleToken::Else,
+            SimpleToken::LeftBrace,
+            SimpleToken::Reference("y".to_string()),
+            SimpleToken::Equal,
+            SimpleToken::Number(2),
+            SimpleToken::SemiColon,
+            SimpleToken::RightBrace,
+            SimpleToken::RightBrace,
+            SimpleToken::RightBrace,
+            SimpleToken::Eof
+        ],
+        Node::Program {
+            procedures: vec![Box::new(Node::Procedure {
+                name: "main".to_string(),
+                body: Box::new(Node::StatementList {
+                    statements: vec![
+                        Box::new(Node::While {
+                            line: 1,
+                            variable: "x".to_string(),
+                            statements: Box::new(Node::StatementList { statements: vec![
+                                Box::new(Node::If {
+                                    line: 2,
+                                    variable: "y".to_string(),
+                                    if_statements: Box::new(Node::StatementList { statements: vec![
+                                        Box::new(Node::Assign {
+                                            line: 3,
+                                            variable: "y".to_string(),
+                                            expression: Box::new(Node::Constant { value: 1 }),
+                                        }),
+                                    ] }),
+                                    else_statements: Box::new(Node::StatementList { statements: vec![
+                                        Box::new(Node::Assign {
+                                            line: 4,
+                                            variable: "y".to_string(),
+                                            expression: Box::new(Node::Constant { value: 2 }),
+                                        }),
+                                    ] }),
+                                }),
+                            ] }),
+                        }),
+                    ]
+                }),
+            })]
+        }
+    )]
+    fn test_parse_program(
+        #[case] tokens: &[SimpleToken],
+        #[case] expected: Node,
+    ) -> Result<(), SimpleParserError> {
+        let lexer = Box::new(TestLexer {
+            tokens: tokens.to_vec(),
+        });
+        let parser = SimpleParser::new(lexer);
+
+        let ast = parser.parse_program("")?;
 
         assert_eq!(ast, expected);
 

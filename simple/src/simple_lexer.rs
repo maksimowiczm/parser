@@ -1,6 +1,6 @@
+use basic_lexer::LexerError;
 use lexing::lexer::basic_lexer::{BasicLexer, Token};
 use lexing::lexer::{basic_lexer, Lexer};
-use basic_lexer::LexerError;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
@@ -26,6 +26,7 @@ pub enum SimpleToken {
     Reference(String),
     While(String),
     If(String),
+    Else,
 }
 
 #[derive(Debug, PartialEq)]
@@ -76,12 +77,23 @@ impl Lexer<SimpleToken, SimpleLexerError> for SimpleLexer {
                         }
                     }
                     "if" => {
-                        if let Some(Token::Word(name)) = iter.next() {
-                            result.push(SimpleToken::If(name.clone()));
-                        } else {
+                        let name = match iter.next() {
+                            Some(Token::Word(name)) => name,
+                            _ => return Err(SimpleLexerError::ExpectedReferenceName),
+                        };
+
+                        let then = match iter.next() {
+                            Some(Token::Word(then)) => then,
+                            _ => return Err(SimpleLexerError::ExpectedReferenceName),
+                        };
+
+                        if then != "then" {
                             return Err(SimpleLexerError::ExpectedReferenceName);
                         }
+
+                        result.push(SimpleToken::If(name.clone()));
                     }
+                    "else" => result.push(SimpleToken::Else),
                     _ => result.push(SimpleToken::Reference(word.clone())),
                 },
                 _ => result.push(map_token(token)?),
