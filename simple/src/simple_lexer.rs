@@ -29,6 +29,29 @@ pub enum SimpleToken {
     Else,
 }
 
+impl Display for SimpleToken {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SimpleToken::Number { .. } => write!(f, "Number"),
+            SimpleToken::Plus => write!(f, "Plus"),
+            SimpleToken::Minus => write!(f, "Minus"),
+            SimpleToken::Multiply => write!(f, "Multiply"),
+            SimpleToken::Eof => write!(f, "Eof"),
+            SimpleToken::LeftParenthesis => write!(f, "LeftParenthesis"),
+            SimpleToken::RightParenthesis => write!(f, "RightParenthesis"),
+            SimpleToken::LeftBrace => write!(f, "LeftBrace"),
+            SimpleToken::RightBrace => write!(f, "RightBrace"),
+            SimpleToken::Equal => write!(f, "Equal"),
+            SimpleToken::SemiColon => write!(f, "SemiColon"),
+            SimpleToken::Procedure { .. } => write!(f, "Procedure"),
+            SimpleToken::Reference(name) => write!(f, "Reference {}", name),
+            SimpleToken::While { .. } => write!(f, "While"),
+            SimpleToken::If { .. } => write!(f, "If"),
+            SimpleToken::Else => write!(f, "Else"),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum SimpleLexerError {
     ExpectedProcedureName,

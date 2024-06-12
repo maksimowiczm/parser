@@ -1,16 +1,20 @@
 use crate::simple_lexer::{SimpleLexerError, SimpleToken};
+use itertools::Itertools;
 use lexing::lexer::Lexer;
 use std::error::Error;
-use std::fmt::{write, Debug, Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::iter::Peekable;
 
 pub struct SimpleParser {
     lexer: Box<dyn Lexer<SimpleToken, SimpleLexerError>>,
 }
 
-#[derive(Debug)]
 pub enum SimpleParserError {
-    UnexpectedToken(SimpleToken),
+    UnexpectedToken {
+        unexpected: SimpleToken,
+        expected: Vec<SimpleToken>,
+        near_tokens: Vec<SimpleToken>,
+    },
     UnexpectedEndOfInput,
     LexerError(SimpleLexerError),
 }
@@ -18,8 +22,22 @@ pub enum SimpleParserError {
 impl Display for SimpleParserError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            SimpleParserError::UnexpectedToken(token) => {
-                write!(f, "Unexpected token: {:?}", token)
+            SimpleParserError::UnexpectedToken {
+                unexpected,
+                expected,
+                near_tokens,
+            } => {
+                let expected = expected.iter().map(|e| format!("{}", e)).join(", ");
+                let near = [unexpected.clone()]
+                    .iter()
+                    .chain(near_tokens)
+                    .map(|e| format!("{}", e))
+                    .join(", ");
+                write!(
+                    f,
+                    "Unexpected: {}. Expected: [{}]. Near: [{}]",
+                    unexpected, expected, near
+                )
             }
             SimpleParserError::UnexpectedEndOfInput => write!(f, "Unexpected end of input"),
             SimpleParserError::LexerError(err) => write!(f, "Lexer error: {}", err),
@@ -28,6 +46,12 @@ impl Display for SimpleParserError {
 }
 
 impl Error for SimpleParserError {}
+
+impl Debug for SimpleParserError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
 
 #[derive(PartialEq)]
 pub enum Operator {
@@ -194,13 +218,17 @@ fn expect_token(
     tokens: &mut impl Iterator<Item = SimpleToken>,
     expected: SimpleToken,
 ) -> Result<(), SimpleParserError> {
-    match tokens
+    let token = tokens
         .next()
-        .ok_or(SimpleParserError::UnexpectedEndOfInput)?
-        .eq(&expected)
-    {
+        .ok_or(SimpleParserError::UnexpectedEndOfInput)?;
+
+    match token == expected {
         true => Ok(()),
-        false => Err(SimpleParserError::UnexpectedToken(expected)),
+        false => Err(SimpleParserError::UnexpectedToken {
+            unexpected: token,
+            expected: vec![expected],
+            near_tokens: tokens.take(6).collect(),
+        }),
     }
 }
 
@@ -247,9 +275,15 @@ fn statement(
         Some(SimpleToken::Reference(_)) => assign(tokens, *line),
         Some(SimpleToken::While(_)) => while_statement(tokens, line),
         Some(SimpleToken::If(_)) => if_statement(tokens, line),
-        _ => Err(SimpleParserError::UnexpectedToken(
-            tokens.next().unwrap_or(SimpleToken::Eof),
-        )),
+        _ => Err(SimpleParserError::UnexpectedToken {
+            unexpected: tokens.next().unwrap_or(SimpleToken::Eof),
+            expected: vec![
+                SimpleToken::Reference("_".to_string()),
+                SimpleToken::While("".to_string()),
+                SimpleToken::If("".to_string()),
+            ],
+            near_tokens: tokens.take(6).collect(),
+        }),
     }
 }
 
@@ -392,7 +426,15 @@ fn factor(
             Ok(node)
         }
         SimpleToken::Reference(name) => Ok(Node::Reference { name }),
-        _ => Err(SimpleParserError::UnexpectedToken(token)),
+        _ => Err(SimpleParserError::UnexpectedToken {
+            unexpected: token,
+            expected: vec![
+                SimpleToken::Number(0),
+                SimpleToken::LeftParenthesis,
+                SimpleToken::Reference("_".to_string()),
+            ],
+            near_tokens: tokens.take(6).collect(),
+        }),
     }
 }
 
@@ -400,6 +442,15 @@ fn factor(
 mod tests {
     use super::*;
     use rstest::rstest;
+
+    struct TestLexer {
+        tokens: Vec<SimpleToken>,
+    }
+    impl Lexer<SimpleToken, SimpleLexerError> for TestLexer {
+        fn tokenize(&self, _input: &str) -> Result<Vec<SimpleToken>, SimpleLexerError> {
+            Ok(self.tokens.clone())
+        }
+    }
 
     #[rstest]
     #[case::constant(

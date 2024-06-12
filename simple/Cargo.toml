@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 rstest = "=0.21.0"
 lexing = { path = "../lexing" }
+itertools = "0.13.0"
