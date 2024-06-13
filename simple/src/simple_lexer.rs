@@ -59,6 +59,7 @@ pub enum SimpleLexerError {
     ExpectedProcedureName,
     ExpectedReferenceName,
     UnexpectedCharacter(char),
+    UnexpectedToken(Token),
 }
 
 impl Display for SimpleLexerError {
@@ -69,6 +70,7 @@ impl Display for SimpleLexerError {
             SimpleLexerError::UnexpectedCharacter(ch) => {
                 write!(f, "Unexpected character: {}", ch)
             }
+            SimpleLexerError::UnexpectedToken(token) => write!(f, "Unexpected token: {:?}", token),
         }
     }
 }
@@ -149,7 +151,7 @@ fn map_token(token: &Token) -> Result<SimpleToken, SimpleLexerError> {
         Token::RightBrace => SimpleToken::RightBrace,
         Token::Equal => SimpleToken::Equal,
         Token::SemiColon => SimpleToken::SemiColon,
-        _ => panic!("Unexpected token"),
+        _ => return Err(SimpleLexerError::UnexpectedToken(token.clone())),
     };
 
     Ok(result)
