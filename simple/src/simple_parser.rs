@@ -79,14 +79,14 @@ impl Debug for Operator {
 #[derive(PartialEq)]
 pub enum Node {
     Program {
-        procedures: Vec<Box<Node>>,
+        procedures: Vec<Node>,
     },
     Procedure {
         name: String,
         body: Box<Node>,
     },
     StatementList {
-        statements: Vec<Box<Node>>,
+        statements: Vec<Node>,
     },
     Assign {
         line: u32,
@@ -207,7 +207,7 @@ impl SimpleParser {
             if tokens.peek().unwrap() == &SimpleToken::Eof {
                 break;
             }
-            procedures.push(Box::new(procedure(&mut tokens, &mut line)?));
+            procedures.push(procedure(&mut tokens, &mut line)?);
         }
 
         Ok(Node::Program { procedures })
@@ -259,7 +259,7 @@ fn statement_list(
                 tokens.next();
                 break;
             }
-            _ => body.push(Box::new(statement(tokens, line)?)),
+            _ => body.push(statement(tokens, line)?),
         }
     }
 
@@ -569,10 +569,10 @@ mod tests {
             SimpleToken::Eof
         ],
         Node::Program {
-            procedures: vec![Box::new(Node::Procedure {
+            procedures: vec![Node::Procedure {
                 name: "main".to_string(),
                 body: Box::new(Node::StatementList { statements: vec![] }),
-            })]
+            }]
         }
     )]
     #[case::multiple_procedures(
@@ -587,14 +587,14 @@ mod tests {
         ],
         Node::Program {
             procedures: vec![
-                Box::new(Node::Procedure {
+                Node::Procedure {
                     name: "main".to_string(),
                     body: Box::new(Node::StatementList { statements: vec![] }),
-                }),
-                Box::new(Node::Procedure {
+                },
+                Node::Procedure {
                     name: "foo".to_string(),
                     body: Box::new(Node::StatementList { statements: vec![] }),
-                }),
+                },
             ]
         }
     )]
@@ -610,18 +610,18 @@ mod tests {
             SimpleToken::Eof
         ],
         Node::Program {
-            procedures: vec![Box::new(Node::Procedure {
+            procedures: vec![Node::Procedure {
                 name: "main".to_string(),
                 body: Box::new(Node::StatementList {
                     statements: vec![
-                        Box::new(Node::Assign {
+                        Node::Assign {
                             line: 1,
                             variable: "x".to_string(),
                             expression: Box::new(Node::Constant { value: 1 }),
-                        }),
+                        },
                     ]
                 }),
-            })]
+            }]
         }
     )]
     #[case::procedure_with_while_with_assigment(
@@ -639,24 +639,24 @@ mod tests {
             SimpleToken::Eof
         ],
         Node::Program {
-            procedures: vec![Box::new(Node::Procedure {
+            procedures: vec![Node::Procedure {
                 name: "main".to_string(),
                 body: Box::new(Node::StatementList {
                     statements: vec![
-                        Box::new(Node::While {
+                        Node::While {
                             line: 1,
                             variable: "x".to_string(),
                             statements: Box::new(Node::StatementList { statements: vec![
-                                Box::new(Node::Assign {
+                                Node::Assign {
                                     line: 2,
                                     variable: "x".to_string(),
                                     expression: Box::new(Node::Constant { value: 1 }),
-                                }),
+                                },
                             ] }),
-                        }),
+                        },
                     ]
                 }),
-            })]
+            }]
         }
     )]
     #[case::procedure_with_if_assignment(
@@ -681,31 +681,31 @@ mod tests {
             SimpleToken::Eof
         ],
         Node::Program {
-            procedures: vec![Box::new(Node::Procedure {
+            procedures: vec![Node::Procedure {
                 name: "main".to_string(),
                 body: Box::new(Node::StatementList {
                     statements: vec![
-                        Box::new(Node::If {
+                        Node::If {
                             line: 1,
                             variable: "x".to_string(),
                             if_statements: Box::new(Node::StatementList { statements: vec![
-                                Box::new(Node::Assign {
+                                Node::Assign {
                                     line: 2,
                                     variable: "x".to_string(),
                                     expression: Box::new(Node::Constant { value: 1 }),
-                                }),
+                                },
                             ] }),
                             else_statements: Box::new(Node::StatementList { statements: vec![
-                                Box::new(Node::Assign {
+                                Node::Assign {
                                     line: 3,
                                     variable: "x".to_string(),
                                     expression: Box::new(Node::Constant { value: 2 }),
-                                }),
+                                },
                             ] }),
-                        }),
+                        },
                     ]
                 }),
-            })]
+            }]
         }
     )]
     #[case::procedure_with_while_with_if_with_assignment(
@@ -733,37 +733,37 @@ mod tests {
             SimpleToken::Eof
         ],
         Node::Program {
-            procedures: vec![Box::new(Node::Procedure {
+            procedures: vec![Node::Procedure {
                 name: "main".to_string(),
                 body: Box::new(Node::StatementList {
                     statements: vec![
-                        Box::new(Node::While {
+                        Node::While {
                             line: 1,
                             variable: "x".to_string(),
                             statements: Box::new(Node::StatementList { statements: vec![
-                                Box::new(Node::If {
+                                Node::If {
                                     line: 2,
                                     variable: "y".to_string(),
                                     if_statements: Box::new(Node::StatementList { statements: vec![
-                                        Box::new(Node::Assign {
+                                        Node::Assign {
                                             line: 3,
                                             variable: "y".to_string(),
                                             expression: Box::new(Node::Constant { value: 1 }),
-                                        }),
+                                        },
                                     ] }),
                                     else_statements: Box::new(Node::StatementList { statements: vec![
-                                        Box::new(Node::Assign {
+                                        Node::Assign {
                                             line: 4,
                                             variable: "y".to_string(),
                                             expression: Box::new(Node::Constant { value: 2 }),
-                                        }),
+                                        },
                                     ] }),
-                                }),
+                                },
                             ] }),
-                        }),
+                        },
                     ]
                 }),
-            })]
+            }]
         }
     )]
     #[case::procedure_with_call(
@@ -776,17 +776,17 @@ mod tests {
             SimpleToken::Eof
         ],
         Node::Program {
-            procedures: vec![Box::new(Node::Procedure {
+            procedures: vec![Node::Procedure {
                 name: "main".to_string(),
                 body: Box::new(Node::StatementList {
                     statements: vec![
-                        Box::new(Node::Call {
+                        Node::Call {
                             line: 1,
                             name: "foo".to_string(),
-                        }),
+                        },
                     ]
                 }),
-            })]
+            }]
         }
     )]
     fn test_parse_program(
@@ -837,37 +837,37 @@ mod tests {
             variable: "x".to_string(),
             if_statements: Box::new(Node::StatementList {
                 statements: vec![
-                    Box::new(Node::If {
+                    Node::If {
                         line: 2,
                         variable: "y".to_string(),
                         if_statements: Box::new(Node::StatementList {
                             statements: vec![
-                                Box::new(Node::Assign {
+                                Node::Assign {
                                     line: 3,
                                     variable: "z".to_string(),
                                     expression: Box::new(Node::Constant { value: 1 }),
-                                }),
+                                },
                             ]
                         }),
                         else_statements: Box::new(Node::StatementList {
                             statements: vec![
-                                Box::new(Node::Assign {
+                                Node::Assign {
                                     line: 4,
                                     variable: "a".to_string(),
                                     expression: Box::new(Node::Constant { value: 2 }),
-                                }),
+                                },
                             ]
                         }),
-                    }),
+                    },
                 ]
             }),
             else_statements: Box::new(Node::StatementList {
                 statements: vec![
-                    Box::new(Node::Assign {
+                    Node::Assign {
                         line: 5,
                         variable: "b".to_string(),
                         expression: Box::new(Node::Constant { value: 3 }),
-                    }),
+                    },
                 ]
             }),
         }
@@ -913,54 +913,54 @@ mod tests {
             variable: "x".to_string(),
             if_statements: Box::new(Node::StatementList {
                 statements: vec![
-                    Box::new(Node::If {
+                    Node::If {
                         line: 2,
                         variable: "y".to_string(),
                         if_statements: Box::new(Node::StatementList {
                             statements: vec![
-                                Box::new(Node::If {
+                                Node::If {
                                     line: 3,
                                     variable: "z".to_string(),
                                     if_statements: Box::new(Node::StatementList {
                                         statements: vec![
-                                            Box::new(Node::Assign {
+                                            Node::Assign {
                                                 line: 4,
                                                 variable: "z".to_string(),
                                                 expression: Box::new(Node::Constant { value: 1 }),
-                                            }),
+                                            },
                                         ]
                                     }),
                                     else_statements: Box::new(Node::StatementList {
                                         statements: vec![
-                                            Box::new(Node::Assign {
+                                            Node::Assign {
                                                 line: 5,
                                                 variable: "a".to_string(),
                                                 expression: Box::new(Node::Constant { value: 2 }),
-                                            }),
+                                            },
                                         ]
                                     }),
-                                }),
+                                },
                             ]
                         }),
                         else_statements: Box::new(Node::StatementList {
                             statements: vec![
-                                Box::new(Node::Assign {
+                                Node::Assign {
                                     line: 6,
                                     variable: "b".to_string(),
                                     expression: Box::new(Node::Constant { value: 3 }),
-                                }),
+                                },
                             ]
                         }),
-                    }),
+                    },
                 ]
             }),
             else_statements: Box::new(Node::StatementList {
                 statements: vec![
-                    Box::new(Node::Assign {
+                    Node::Assign {
                         line: 7,
                         variable: "c".to_string(),
                         expression: Box::new(Node::Constant { value: 3 }),
-                    }),
+                    },
                 ]
             }),
         }
@@ -998,19 +998,19 @@ mod tests {
             variable: "x".to_string(),
             statements: Box::new(Node::StatementList {
                 statements: vec![
-                    Box::new(Node::While {
+                    Node::While {
                         line: 2,
                         variable: "y".to_string(),
                         statements: Box::new(Node::StatementList {
                             statements: vec![
-                                Box::new(Node::Assign {
+                                Node::Assign {
                                     line: 3,
                                     variable: "z".to_string(),
                                     expression: Box::new(Node::Constant { value: 1 }),
-                                }),
+                                },
                             ]
                         }),
-                    }),
+                    },
                 ]
             }),
         }
@@ -1051,32 +1051,32 @@ mod tests {
         ],
         Node::StatementList {
             statements: vec![
-                Box::new(Node::While {
+                Node::While {
                     line: 1,
                     variable: "x".to_string(),
                     statements: Box::new(Node::StatementList {
                         statements: vec![
-                            Box::new(Node::Assign {
+                            Node::Assign {
                                 line: 2,
                                 variable: "x".to_string(),
                                 expression: Box::new(Node::Constant { value: 1 }),
-                            }),
+                            },
                         ]
                     }),
-                }),
-                Box::new(Node::While {
+                },
+                Node::While {
                     line: 3,
                     variable: "y".to_string(),
                     statements: Box::new(Node::StatementList {
                         statements: vec![
-                            Box::new(Node::Assign {
+                            Node::Assign {
                                 line: 4,
                                 variable: "y".to_string(),
                                 expression: Box::new(Node::Constant { value: 2 }),
-                            }),
+                            },
                         ]
                     }),
-                }),
+                },
             ]
         }
     )]
