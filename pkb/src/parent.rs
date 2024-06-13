@@ -59,6 +59,24 @@ impl Parent {
         }
     }
 
+    pub fn is_parent(&self, parent: u32, child: u32) -> bool {
+        match self.parent.get(&child) {
+            Some(p) => *p == parent,
+            None => false,
+        }
+    }
+
+    pub fn is_parent_transitive(&self, parent: u32, child: u32) -> bool {
+        let mut current = child;
+        while let Some(p) = self.parent.get(&current) {
+            if *p == parent {
+                return true;
+            }
+            current = *p;
+        }
+        false
+    }
+
     fn set_parent(&mut self, ast: &Node, parent_line: u32) -> Result<(), ParentError> {
         if let Node::StatementList { statements } = ast {
             for statement in statements {
@@ -83,6 +101,7 @@ impl Parent {
 
 #[cfg(test)]
 mod tests {
+    use crate::parent::Parent;
     use crate::AstAnalysis;
     use itertools::Itertools;
     use rstest::rstest;
@@ -231,5 +250,26 @@ mod tests {
             .collect::<Vec<(u32, u32)>>();
 
         assert_eq!(collected, expected_parent);
+    }
+
+    #[rstest]
+    #[case::no_parent(&[], (1, 2), false)]
+    #[case::single_parent(&[(2, 1)], (1, 2), true)]
+    #[case::single_parent_false(&[(2, 1)], (1, 3), false)]
+    #[case::nested_parent(&[(2, 1), (3, 2), (4, 2)], (1, 4), true)]
+    #[case::nested_parent(&[(2, 1), (3, 2), (4, 2)], (1, 3), true)]
+    #[case::nested_parent(&[(2, 1), (3, 2), (4, 2)], (1, 2), true)]
+    #[case::nested_parent(&[(2, 1), (3, 2), (4, 2), (5, 6)], (1, 5), false)]
+    #[case::nested_parent(&[(2, 1), (3, 2), (4, 2), (5, 6)], (1, 6), false)]
+    fn test_parent_transitive(
+        #[case] parent: &[(u32, u32)],
+        #[case] relation: (u32, u32),
+        #[case] expected: bool,
+    ) {
+        let parent = Parent {
+            parent: parent.iter().cloned().collect(),
+        };
+        let result = parent.is_parent_transitive(relation.0, relation.1);
+        assert_eq!(result, expected);
     }
 }
