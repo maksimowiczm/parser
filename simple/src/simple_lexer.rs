@@ -173,7 +173,7 @@ mod tests {
         SimpleToken::RightBrace,
         SimpleToken::Eof,
     ])]
-    #[case::if_statement("if x { }", &[
+    #[case::if_statement("if x then { }", &[
         SimpleToken::If("x".to_string()),
         SimpleToken::LeftBrace,
         SimpleToken::RightBrace,
