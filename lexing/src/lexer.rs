@@ -8,7 +8,7 @@ pub mod basic_lexer {
     #[derive(Default)]
     pub struct BasicLexer;
 
-    #[derive(Debug, PartialEq)]
+    #[derive(Debug, PartialEq, Clone)]
     pub enum Token {
         Number(i32),
         Plus,
@@ -22,6 +22,8 @@ pub mod basic_lexer {
         Equal,
         SemiColon,
         Word(String),
+        Comma,
+        Underscore,
     }
 
     #[derive(Debug)]
@@ -45,6 +47,8 @@ pub mod basic_lexer {
                     '}' => tokens.push(Token::RightBrace),
                     '=' => tokens.push(Token::Equal),
                     ';' => tokens.push(Token::SemiColon),
+                    ',' => tokens.push(Token::Comma),
+                    '_' => tokens.push(Token::Underscore),
                     '0'..='9' => {
                         let mut number = ch.to_digit(10).unwrap() as i32;
                         while let Some(ch) = iter.peek() {
@@ -112,6 +116,8 @@ mod tests {
     #[case::assignment("a=1", &[Token::Word("a".to_string()), Token::Equal, Token::Number(1), Token::Eof])]
     #[case::assignment("a =1", &[Token::Word("a".to_string()), Token::Equal, Token::Number(1), Token::Eof])]
     #[case::assignment("a= 1", &[Token::Word("a".to_string()), Token::Equal, Token::Number(1), Token::Eof])]
+    #[case::commas("a, b", &[Token::Word("a".to_string()), Token::Comma, Token::Word("b".to_string()), Token::Eof])]
+    #[case::underscores("a_b", &[Token::Word("a".to_string()), Token::Underscore, Token::Word("b".to_string()), Token::Eof])]
     fn test_basic_lexer(#[case] input: &'static str, #[case] output: &[Token]) {
         let lexer = BasicLexer::default();
         let tokens = lexer.tokenize(input).unwrap();

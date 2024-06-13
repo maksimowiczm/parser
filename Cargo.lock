@@ -203,6 +203,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "pql"
+version = "0.1.0"
+dependencies = [
+ "lexing",
+ "rstest",
+]
+
+[[package]]
 name = "proc-macro-crate"
 version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
