@@ -1,6 +1,18 @@
 use crate::query::Query;
+#[cfg(test)]
+use mockall::automock;
+
+#[cfg_attr(test, automock)]
+pub trait QueryBuilder {
+    fn add_declaration(&mut self, declaration: (String, Vec<String>));
+    fn set_result(&mut self, result: ResultType);
+    fn add_follows(&mut self, predecessor: String, follower: String);
+    fn add_parent(&mut self, parent: String, child: String);
+    fn build(&self) -> Query;
+}
 
 #[derive(Default)]
+#[cfg_attr(test, derive(Debug, PartialEq))]
 pub enum ResultType {
     Single(String),
     #[default]
@@ -8,31 +20,31 @@ pub enum ResultType {
 }
 
 #[derive(Default)]
-pub struct QueryBuilder {
+pub struct QueryBuilderImpl {
     declarations: Vec<(String, Vec<String>)>,
     result_type: ResultType,
     follows: Vec<(String, String)>,
     parent: Vec<(String, String)>,
 }
 
-impl QueryBuilder {
-    pub(crate) fn add_declaration(&mut self, declaration: (String, Vec<String>)) {
+impl QueryBuilder for QueryBuilderImpl {
+    fn add_declaration(&mut self, declaration: (String, Vec<String>)) {
         self.declarations.push(declaration);
     }
 
-    pub(crate) fn set_result(&mut self, result: ResultType) {
+    fn set_result(&mut self, result: ResultType) {
         self.result_type = result;
     }
 
-    pub(crate) fn add_follows(&mut self, predecessor: String, follower: String) {
+    fn add_follows(&mut self, predecessor: String, follower: String) {
         self.follows.push((predecessor, follower));
     }
 
-    pub(crate) fn add_parent(&mut self, parent: String, child: String) {
+    fn add_parent(&mut self, parent: String, child: String) {
         self.parent.push((parent, child));
     }
 
-    pub(crate) fn build(self) -> Query {
+    fn build(&self) -> Query {
         Query {}
     }
 }

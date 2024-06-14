@@ -9,6 +9,7 @@ pub struct PqlLexer {
 }
 
 #[derive(Debug, PartialEq)]
+#[cfg_attr(test, derive(Clone))]
 pub enum PqlToken {
     Number(i32),
     Select(Vec<String>),

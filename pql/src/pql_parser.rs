@@ -8,6 +8,7 @@ use std::iter::Peekable;
 
 pub struct PqlParser {
     lexer: Box<dyn Lexer<PqlToken, PqlLexerError>>,
+    builder: Box<dyn QueryBuilder>,
 }
 
 #[derive(Debug)]
@@ -50,8 +51,11 @@ impl Display for PqlParserError {
 impl Error for PqlParserError {}
 
 impl PqlParser {
-    pub fn new(lexer: Box<dyn Lexer<PqlToken, PqlLexerError>>) -> Self {
-        Self { lexer }
+    pub fn new(
+        lexer: Box<dyn Lexer<PqlToken, PqlLexerError>>,
+        builder: Box<dyn QueryBuilder>,
+    ) -> Self {
+        Self { lexer, builder }
     }
 
     pub fn parse(&mut self, input: &str) -> Result<Query, PqlParserError> {
@@ -62,11 +66,9 @@ impl PqlParser {
             .into_iter()
             .peekable();
 
-        let mut query_builder = QueryBuilder::default();
+        select(&mut tokens, self.builder.as_mut())?;
 
-        select(&mut tokens, &mut query_builder)?;
-
-        let query = query_builder.build();
+        let query = self.builder.build();
 
         Ok(query)
     }
@@ -90,7 +92,7 @@ fn expect_token(
 
 fn select(
     tokens: &mut Peekable<impl Iterator<Item = PqlToken>>,
-    builder: &mut QueryBuilder,
+    builder: &mut dyn QueryBuilder,
 ) -> Result<(), PqlParserError> {
     while let Some(token) = tokens.peek() {
         if let PqlToken::Select(select) = token {
@@ -163,7 +165,7 @@ fn declaration_names(
     Ok(names)
 }
 
-fn result(select: &Vec<String>, builder: &mut QueryBuilder) -> Result<(), PqlParserError> {
+fn result(select: &Vec<String>, builder: &mut dyn QueryBuilder) -> Result<(), PqlParserError> {
     if select.len() == 1 {
         let token = select.first().unwrap();
 
@@ -181,7 +183,7 @@ fn result(select: &Vec<String>, builder: &mut QueryBuilder) -> Result<(), PqlPar
 
 fn condition(
     tokens: &mut Peekable<impl Iterator<Item = PqlToken>>,
-    builder: &mut QueryBuilder,
+    builder: &mut dyn QueryBuilder,
 ) -> Result<(), PqlParserError> {
     let token = tokens.next().ok_or(PqlParserError::UnexpectedEndOfInput)?;
 
@@ -197,7 +199,7 @@ fn condition(
 
 fn such_that(
     tokens: &mut Peekable<impl Iterator<Item = PqlToken>>,
-    builder: &mut QueryBuilder,
+    builder: &mut dyn QueryBuilder,
 ) -> Result<(), PqlParserError> {
     let token = tokens.next().ok_or(PqlParserError::UnexpectedEndOfInput)?;
 
@@ -231,7 +233,7 @@ fn such_that(
 
 fn and_such_that(
     tokens: &mut Peekable<impl Iterator<Item = PqlToken>>,
-    builder: &mut QueryBuilder,
+    builder: &mut dyn QueryBuilder,
 ) -> Result<(), PqlParserError> {
     let token = tokens.peek().ok_or(PqlParserError::UnexpectedEndOfInput)?;
 
@@ -249,7 +251,7 @@ fn and_such_that(
 
 fn follows(
     tokens: &mut Peekable<impl Iterator<Item = PqlToken> + Sized>,
-    builder: &mut QueryBuilder,
+    builder: &mut dyn QueryBuilder,
 ) -> Result<(), PqlParserError> {
     expect_token(tokens, PqlToken::LeftParenthesis)?;
     let predecessor = tokens.next().ok_or(PqlParserError::UnexpectedEndOfInput)?;
@@ -276,7 +278,7 @@ fn follows(
 
 fn parent(
     tokens: &mut Peekable<impl Iterator<Item = PqlToken> + Sized>,
-    builder: &mut QueryBuilder,
+    builder: &mut dyn QueryBuilder,
 ) -> Result<(), PqlParserError> {
     expect_token(tokens, PqlToken::LeftParenthesis)?;
     let parent = tokens.next().ok_or(PqlParserError::UnexpectedEndOfInput)?;
@@ -304,6 +306,126 @@ fn parent(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pql_lexer::PqlLexer;
-    use lexing::lexer::Lexer;
+    use crate::query::query_builder::MockQueryBuilder;
+    use mockall::predicate::eq;
+    use rstest::rstest;
+
+    #[rstest]
+    #[case::parent_both_underscore(
+        &[
+            PqlToken::Word("Parent".to_string()),
+            PqlToken::LeftParenthesis,
+            PqlToken::Underscore,
+            PqlToken::Comma,
+            PqlToken::Underscore,
+            PqlToken::RightParenthesis,
+            PqlToken::Eof,
+        ],
+        |b: &mut MockQueryBuilder| {
+            b.expect_add_parent().with(eq("_".to_string()), eq("_".to_string())).times(1).returning(|_, _| {});
+        }
+    )]
+    #[case::parent_both_words(
+        &[
+            PqlToken::Word("Parent".to_string()),
+            PqlToken::LeftParenthesis,
+            PqlToken::Word("p".to_string()),
+            PqlToken::Comma,
+            PqlToken::Word("c".to_string()),
+            PqlToken::RightParenthesis,
+            PqlToken::Eof,
+        ],
+        |b: &mut MockQueryBuilder| {
+            b.expect_add_parent().with(eq("p".to_string()), eq("c".to_string())).times(1).returning(|_, _| {});
+        }
+    )]
+    #[case::follows_both_underscore(
+        &[
+            PqlToken::Word("Follows".to_string()),
+            PqlToken::LeftParenthesis,
+            PqlToken::Underscore,
+            PqlToken::Comma,
+            PqlToken::Underscore,
+            PqlToken::RightParenthesis,
+            PqlToken::Eof,
+        ],
+        |b: &mut MockQueryBuilder| {
+            b.expect_add_follows().with(eq("_".to_string()), eq("_".to_string())).times(1).returning(|_, _| {});
+        }
+    )]
+    #[case::follows_both_words(
+        &[
+            PqlToken::Word("Follows".to_string()),
+            PqlToken::LeftParenthesis,
+            PqlToken::Word("p".to_string()),
+            PqlToken::Comma,
+            PqlToken::Word("c".to_string()),
+            PqlToken::RightParenthesis,
+            PqlToken::Eof,
+        ],
+        |b: &mut MockQueryBuilder| {
+            b.expect_add_follows().with(eq("p".to_string()), eq("c".to_string())).times(1).returning(|_, _| {});
+        }
+    )]
+    fn test_parent(
+        #[case] tokens: &[PqlToken],
+        #[case] mock_setup: fn(&mut MockQueryBuilder),
+    ) -> Result<(), PqlParserError> {
+        let mut builder = MockQueryBuilder::new();
+        mock_setup(&mut builder);
+
+        let mut tokens = tokens.iter().cloned().peekable();
+        such_that(&mut tokens, &mut builder)
+    }
+
+    struct TestLexer {
+        tokens: Vec<PqlToken>,
+    }
+    impl Lexer<PqlToken, PqlLexerError> for TestLexer {
+        fn tokenize(&self, _input: &str) -> Result<Vec<PqlToken>, PqlLexerError> {
+            Ok(self.tokens.clone())
+        }
+    }
+
+    #[rstest]
+    #[case::follows_query_with_declarations(
+        vec![
+            PqlToken::Word("stmt".to_string()),
+            PqlToken::Word("s".to_string()),
+            PqlToken::SemiColon,
+            PqlToken::Word("assign".to_string()),
+            PqlToken::Word("a".to_string()),
+            PqlToken::Comma,
+            PqlToken::Word("b".to_string()),
+            PqlToken::SemiColon,
+            PqlToken::Select(vec!["s".to_string()]),
+            PqlToken::SuchThat,
+            PqlToken::Word("Follows".to_string()),
+            PqlToken::LeftParenthesis,
+            PqlToken::Underscore,
+            PqlToken::Comma,
+            PqlToken::Word("s".to_string()),
+            PqlToken::RightParenthesis,
+            PqlToken::Eof,
+        ],
+        |b: &mut MockQueryBuilder| {
+            b.expect_add_declaration().with(eq(("stmt".to_string(), vec!["s".to_string()]))).times(1).returning(|_| {});
+            b.expect_add_declaration().with(eq(("assign".to_string(), vec!["a".to_string(), "b".to_string()]))).times(1).returning(|_| {});
+            b.expect_set_result().with(eq(ResultType::Single("s".to_string()))).times(1).returning(|_| {});
+            b.expect_add_follows().with(eq("_".to_string()), eq("s".to_string())).times(1).returning(|_, _| {});
+            b.expect_build().times(1).returning(|| Query {});
+        }
+    )]
+    fn test_parse(
+        #[case] tokens: Vec<PqlToken>,
+        #[case] mock_setup: fn(&mut MockQueryBuilder),
+    ) -> Result<(), PqlParserError> {
+        let mut builder = MockQueryBuilder::new();
+        mock_setup(&mut builder);
+
+        let mut parser = PqlParser::new(Box::new(TestLexer { tokens }), Box::new(builder));
+        parser.parse("")?;
+
+        Ok(())
+    }
 }
