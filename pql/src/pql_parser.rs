@@ -413,7 +413,7 @@ mod tests {
             b.expect_add_declaration().with(eq(("assign".to_string(), vec!["a".to_string(), "b".to_string()]))).times(1).returning(|_| {});
             b.expect_set_result().with(eq(ResultType::Single("s".to_string()))).times(1).returning(|_| {});
             b.expect_add_follows().with(eq("_".to_string()), eq("s".to_string())).times(1).returning(|_, _| {});
-            b.expect_build().times(1).returning(|| Query {});
+            b.expect_build().times(1).returning(|| Query::default());
         }
     )]
     fn test_parse(
