@@ -2,7 +2,7 @@ use crate::AstAnalysis;
 use simple::simple_parser::Node;
 use std::collections::HashMap;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Follows {
     /// follows relation map from follower to predecessor
     follows: HashMap<u32, u32>,

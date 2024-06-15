@@ -2,7 +2,7 @@ use crate::AstAnalysis;
 use simple::simple_parser::Node;
 use std::collections::HashMap;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Parent {
     /// parent relation map from child to parent
     parent: HashMap<u32, u32>,
