@@ -259,17 +259,8 @@ fn follows(
     let follower = tokens.next().ok_or(PqlParserError::UnexpectedEndOfInput)?;
     expect_token(tokens, PqlToken::RightParenthesis)?;
 
-    let predecessor = match predecessor {
-        PqlToken::Underscore => "_".to_string(),
-        PqlToken::Word(word) => word,
-        _ => return Err(PqlParserError::ExpectedStatementArgument),
-    };
-
-    let follower = match follower {
-        PqlToken::Underscore => "_".to_string(),
-        PqlToken::Word(word) => word,
-        _ => return Err(PqlParserError::ExpectedStatementArgument),
-    };
+    let predecessor = argument_token_to_string(predecessor)?;
+    let follower = argument_token_to_string(follower)?;
 
     builder.add_follows(predecessor, follower);
 
@@ -286,21 +277,23 @@ fn parent(
     let child = tokens.next().ok_or(PqlParserError::UnexpectedEndOfInput)?;
     expect_token(tokens, PqlToken::RightParenthesis)?;
 
-    let parent = match parent {
-        PqlToken::Underscore => "_".to_string(),
-        PqlToken::Word(word) => word,
-        _ => return Err(PqlParserError::ExpectedStatementArgument),
-    };
-
-    let child = match child {
-        PqlToken::Underscore => "_".to_string(),
-        PqlToken::Word(word) => word,
-        _ => return Err(PqlParserError::ExpectedStatementArgument),
-    };
+    let parent = argument_token_to_string(parent)?;
+    let child = argument_token_to_string(child)?;
 
     builder.add_parent(parent, child);
 
     Ok(())
+}
+
+fn argument_token_to_string(token: PqlToken) -> Result<String, PqlParserError> {
+    let result = match token {
+        PqlToken::Underscore => "_".to_string(),
+        PqlToken::Word(word) => word,
+        PqlToken::Number(number) => number.to_string(),
+        _ => return Err(PqlParserError::ExpectedStatementArgument),
+    };
+
+    Ok(result)
 }
 
 #[cfg(test)]
@@ -367,6 +360,20 @@ mod tests {
             b.expect_add_follows().with(eq("p".to_string()), eq("c".to_string())).times(1).returning(|_, _| {});
         }
     )]
+    #[case::both_numbers(
+        &[
+            PqlToken::Word("Follows".to_string()),
+            PqlToken::LeftParenthesis,
+            PqlToken::Number(1),
+            PqlToken::Comma,
+            PqlToken::Number(2),
+            PqlToken::RightParenthesis,
+            PqlToken::Eof,
+        ],
+        |b: &mut MockQueryBuilder| {
+            b.expect_add_follows().with(eq("1".to_string()), eq("2".to_string())).times(1).returning(|_, _| {});
+        }
+    )]
     fn test_parent(
         #[case] tokens: &[PqlToken],
         #[case] mock_setup: fn(&mut MockQueryBuilder),
@@ -413,7 +420,29 @@ mod tests {
             b.expect_add_declaration().with(eq(("assign".to_string(), vec!["a".to_string(), "b".to_string()]))).times(1).returning(|_| {});
             b.expect_set_result().with(eq(ResultType::Single("s".to_string()))).times(1).returning(|_| {});
             b.expect_add_follows().with(eq("_".to_string()), eq("s".to_string())).times(1).returning(|_, _| {});
-            b.expect_build().times(1).returning(|| Query::default());
+            b.expect_build().times(1).returning(|_| Query::default());
+        }
+    )]
+    #[case::with_numbers(
+        vec![
+            PqlToken::Word("stmt".to_string()),
+            PqlToken::Word("s".to_string()),
+            PqlToken::SemiColon,
+            PqlToken::Select(vec!["s".to_string()]),
+            PqlToken::SuchThat,
+            PqlToken::Word("Parent".to_string()),
+            PqlToken::LeftParenthesis,
+            PqlToken::Word("1".to_string()),
+            PqlToken::Comma,
+            PqlToken::Word("2".to_string()),
+            PqlToken::RightParenthesis,
+            PqlToken::Eof,
+        ],
+        |b: &mut MockQueryBuilder| {
+            b.expect_add_declaration().with(eq(("stmt".to_string(), vec!["s".to_string()]))).times(1).returning(|_| {});
+            b.expect_set_result().with(eq(ResultType::Single("s".to_string()))).times(1).returning(|_| {});
+            b.expect_add_parent().with(eq("1".to_string()), eq("2".to_string())).times(1).returning(|_, _| {});
+            b.expect_build().times(1).returning(|_| Query::default());
         }
     )]
     fn test_parse(
