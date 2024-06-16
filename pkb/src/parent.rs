@@ -66,6 +66,18 @@ impl Parent {
         }
     }
 
+    pub fn has_parent(&self, child: u32) -> bool {
+        self.parent.contains_key(&child)
+    }
+
+    pub fn has_child(&self, parent: u32) -> bool {
+        self.parent.values().any(|&v| v == parent)
+    }
+
+    pub fn any(&self) -> bool {
+        !self.parent.is_empty()
+    }
+
     pub fn is_parent_transitive(&self, parent: u32, child: u32) -> bool {
         let mut current = child;
         while let Some(p) = self.parent.get(&current) {
