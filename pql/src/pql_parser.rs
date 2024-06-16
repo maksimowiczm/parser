@@ -2,13 +2,16 @@ use crate::pql_lexer::{PqlLexerError, PqlToken};
 use crate::query::query_builder::{QueryBuilder, ResultType};
 use crate::query::Query;
 use lexing::lexer::Lexer;
+use pkb::pkb_context::PkbContext;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::iter::Peekable;
+use std::rc::Rc;
 
 pub struct PqlParser {
     lexer: Box<dyn Lexer<PqlToken, PqlLexerError>>,
     builder: Box<dyn QueryBuilder>,
+    pkb_context: Rc<PkbContext>,
 }
 
 #[derive(Debug)]
@@ -54,8 +57,13 @@ impl PqlParser {
     pub fn new(
         lexer: Box<dyn Lexer<PqlToken, PqlLexerError>>,
         builder: Box<dyn QueryBuilder>,
+        pkb_context: Rc<PkbContext>,
     ) -> Self {
-        Self { lexer, builder }
+        Self {
+            lexer,
+            builder,
+            pkb_context,
+        }
     }
 
     pub fn parse(&mut self, input: &str) -> Result<Query, PqlParserError> {
@@ -68,7 +76,7 @@ impl PqlParser {
 
         select(&mut tokens, self.builder.as_mut())?;
 
-        let query = self.builder.build();
+        let query = self.builder.build(self.pkb_context.clone());
 
         Ok(query)
     }
@@ -452,7 +460,12 @@ mod tests {
         let mut builder = MockQueryBuilder::new();
         mock_setup(&mut builder);
 
-        let mut parser = PqlParser::new(Box::new(TestLexer { tokens }), Box::new(builder));
+        let context = Default::default();
+        let mut parser = PqlParser::new(
+            Box::new(TestLexer { tokens }),
+            Box::new(builder),
+            Rc::new(context),
+        );
         parser.parse("")?;
 
         Ok(())
